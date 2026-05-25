@@ -19,6 +19,10 @@ fn main() {
             .with_decorations(false)
             .with_transparent(true)
             .with_skip_taskbar(true)
+            .with_undecorated_shadow(false)
+            .with_background_color((0, 0, 0, 0))
+            .with_always_on_bottom(true)
+            .with_resizable(false)
             .with_inner_size(LogicalSize::new(1, 1))
             .with_position(LogicalPosition::new(-10000, -10000)),
     );
