@@ -8,11 +8,23 @@ use dioxus::prelude::*;
 use image::ImageFormat;
 use std::cell::RefCell;
 use std::io::Cursor;
+use std::sync::atomic::{AtomicBool, Ordering};
 use xcap::Monitor;
 
 use crate::components::overlay::{Overlay, OverlayProps};
 
 // 二重起動防止
+static IS_ACTIVE: AtomicBool = AtomicBool::new(false);
+
+pub fn try_start_capture() -> bool {
+    IS_ACTIVE
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_ok()
+}
+
+pub fn cancel_capture() {
+    IS_ACTIVE.store(false, Ordering::SeqCst);
+}
 
 pub struct MonitorCapture {
     pub base64: String,
@@ -39,6 +51,7 @@ pub fn close_all_overlays() {
             w.close();
         }
     });
+    IS_ACTIVE.store(false, Ordering::SeqCst);
 }
 
 pub fn capture_all_monitors() -> Vec<MonitorCapture> {

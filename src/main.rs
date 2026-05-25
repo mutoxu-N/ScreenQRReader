@@ -32,9 +32,17 @@ fn main() {
 
 // キャプチャ処理を非同期で実行し、ウィンドウを生成する関数
 fn trigger_capture() {
+    if !core::capture::try_start_capture() {
+        return;
+    }
+
     spawn(async move {
         let captures = core::capture::capture_all_monitors();
-        core::capture::spawn_overlay_windows(captures);
+        if captures.is_empty() {
+            core::capture::cancel_capture();
+        } else {
+            core::capture::spawn_overlay_windows(captures);
+        }
     });
 }
 
