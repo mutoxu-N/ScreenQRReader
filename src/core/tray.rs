@@ -12,7 +12,7 @@ use dioxus::{
 pub fn create_tray_menu() {
     // タスクトレイアイコン
     let icon = {
-        let icon_bytes = include_bytes!("../../assets/favicon.ico");
+        let icon_bytes = include_bytes!("../../assets/trayicon.png");
         let img =
             image::load_from_memory(icon_bytes).expect("アイコン画像の読み込みに失敗しました");
         let rgba = img.into_rgba8();

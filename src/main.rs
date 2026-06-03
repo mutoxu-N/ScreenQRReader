@@ -7,7 +7,6 @@ mod components;
 mod core;
 mod state;
 
-pub const FAVICON: Asset = asset!("/assets/favicon.ico");
 pub const MAIN_CSS: Asset = asset!("/assets/tailwind.css");
 
 fn main() {
