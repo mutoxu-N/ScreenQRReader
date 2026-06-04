@@ -1,51 +1,46 @@
-# Development
+※このREADMEは、プログラムを基にAIが生成しました
 
-Your new bare-bones project includes minimal organization with a single `main.rs` file and a few assets.
+# ScreenQRReader
 
-```
-project/
-├─ assets/ # Any assets that are used by the app should be placed here
-├─ src/
-│  ├─ main.rs # main.rs is the entry point to your application and currently contains all components for the app
-├─ Cargo.toml # The Cargo.toml file defines the dependencies and feature flags for your project
-```
+ScreenQRReaderは、デスクトップ画面に表示されているQRコードを素早く読み取るためのツールです。ホットキーを押して範囲を選択するだけで、QRコードの内容を自動的に処理します。
 
-### Automatic Tailwind (Dioxus 0.7+)
+![ロゴ](assets/256x256.png)
 
-As of Dioxus 0.7, there no longer is a need to manually install tailwind. Simply `dx serve` and you're good to go!
+## 主な機能
 
-Automatic tailwind is supported by checking for a file called `tailwind.css` in your app's manifest directory (next to Cargo.toml). To customize the file, use the dioxus.toml:
+*   **ホットキー起動:** `Ctrl+Shift+Q` を押すだけで、いつでもキャプチャを開始できます。
+*   **直感的な範囲選択:** マウスをドラッグして、QRコードが含まれる領域を簡単に選択できます。
+*   **自動アクション:**
+    *   読み取った内容がURLの場合、自動的にデフォルトのブラウザで開きます。
+    *   テキストデータの場合、クリップボードにコピーします。
+*   **タスクトレイ常駐:** アプリはバックグラウンドで静かに動作し、必要な時だけ呼び出せます。
 
-```toml
-[application]
-tailwind_input = "my.css"
-tailwind_output = "assets/out.css" # also customize the location of the out file!
-```
+## 使い方
 
-### Tailwind Manual Install
+1.  アプリケーションを起動します。
+2.  タスクトレイにアイコンが表示され、アプリがバックグラウンドで待機します。
+3.  画面上のQRコードを読み取りたい場面で `Ctrl+Shift+Q` を押します。
+4.  画面全体が少し暗くなり、カーソルが十字に変わります。
+5.  QRコードを含む領域をマウスでドラッグして選択します。
+6.  マウスボタンを離すと、QRコードが自動的に処理されます。
 
-To use tailwind plugins or manually customize tailwind, you can can install the Tailwind CLI and use it directly.
+## 開発者向け
 
-### Tailwind
-1. Install npm: https://docs.npmjs.com/downloading-and-installing-node-js-and-npm
-2. Install the Tailwind CSS CLI: https://tailwindcss.com/docs/installation/tailwind-cli
-3. Run the following command in the root of the project to start the Tailwind CSS compiler:
+このプロジェクトは Rust と Dioxus を使用して構築されています。
+
+### 必要なツール
+
+*   Rust
+*   Dioxus CLI
 
 ```bash
-npx @tailwindcss/cli -i ./input.css -o ./assets/tailwind.css --watch
+cargo install dioxus-cli
 ```
 
-### Serving Your App
+### 開発サーバーの起動
 
-Run the following command in the root of your project to start developing with the default platform:
+プロジェクトのルートディレクトリで以下のコマンドを実行します。
 
 ```bash
 dx serve
 ```
-
-To run for a different platform, use the `--platform platform` flag. E.g.
-```bash
-dx serve --platform desktop
-```
-
-
