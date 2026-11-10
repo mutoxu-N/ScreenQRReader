@@ -1,113 +1,135 @@
-// トリミング用のUI
+// トリミング用のUI (egui)
 
+use crate::core::capture::MonitorCapture;
 use crate::state::SelectionRect;
-use dioxus::desktop::use_window;
-use dioxus::prelude::*;
+use egui::{Color32, Pos2, Rect, Stroke, StrokeKind};
 
-#[derive(Props, Clone, PartialEq)]
-pub struct OverlayProps {
-    pub image_data: String,
+pub struct OverlayState {
+    pub capture: MonitorCapture,
+    pub texture: Option<egui::TextureHandle>,
+    pub rect: SelectionRect,
 }
 
-#[component]
-pub fn Overlay(props: OverlayProps) -> Element {
-    let mut rect = use_signal(|| SelectionRect {
-        start_x: 0.0,
-        start_y: 0.0,
-        current_x: 0.0,
-        current_y: 0.0,
-        is_dragging: false,
-    });
-    let window = use_window();
-
-    // マウント時に自身をグローバルなウィンドウリストに登録
-    use_hook(|| {
-        crate::core::capture::register_overlay_window(window.clone());
-    });
-
-    // モニターのスクリーンショットを保持
-    let image_data = props.image_data.clone();
-
-    rsx! {
-        document::Link { rel: "stylesheet", href: crate::MAIN_CSS }
-        div {
-            class: "fixed inset-0 z-[9999] cursor-crosshair select-none outline-none overflow-hidden",
-            tabindex: 0,
-            autofocus: true,
-
-            // ESC ならキャンセル
-            onkeydown: move |e| {
-                if let dioxus::html::input_data::keyboard_types::Key::Escape = e.key() {
-                    crate::core::capture::close_all_overlays();
-                    return;
-                }
-                if let dioxus::html::input_data::keyboard_types::Key::Control = e.key() {
-                    crate::core::capture::close_all_overlays();
-                    return;
-                }
-            },
-
-            // 右クリック時のコンテキストメニュー表示を防ぎつつキャンセル処理
-            oncontextmenu: move |_| {
-                crate::core::capture::close_all_overlays();
-            },
-
-            // ドラッグ開始
-            onmousedown: move |e| {
-                // 右クリックならキャンセル
-                if e.trigger_button() == Some(dioxus::html::input_data::MouseButton::Secondary) {
-                    crate::core::capture::close_all_overlays();
-                    return;
-                }
-
-                let coords = e.client_coordinates();
-                rect.set(SelectionRect {
-                    start_x: coords.x,
-                    start_y: coords.y,
-                    current_x: coords.x,
-                    current_y: coords.y,
-                    is_dragging: true,
-                });
-            },
-
-            // ドラッグ中
-            onmousemove: move |e| {
-                if rect.read().is_dragging {
-                    let coords = e.client_coordinates();
-                    rect.write().current_x = coords.x;
-                    rect.write().current_y = coords.y;
-                }
-            },
-
-            // ドラッグ終了
-            onmouseup: move |_| {
-                if rect.read().is_dragging {
-                    let mut r = rect.write();
-                    r.is_dragging = false;
-
-                    println!("========== 領域が選択されました ==========");
-                    println!("左上X: {}, 左上Y: {}", r.left(), r.top());
-                    println!("幅: {}, 高さ: {}", r.width(), r.height());
-                    println!("========================================");
-
-                    // 全画面と切り抜き領域を渡す
-                    crate::core::qr_action::process_qr_code(&image_data, &r);
-
-                    crate::core::capture::close_all_overlays();
-                }
-            },
-
-            img {
-                src: "{props.image_data}",
-                class: "absolute inset-0 w-full h-full object-cover",
-                draggable: false,
-            }
-
-
-            div {
-                class: "absolute pointer-events-none border border-white/50 z-10",
-                style: "left: {rect.read().left()}px; top: {rect.read().top()}px; width: {rect.read().width()}px; height: {rect.read().height()}px; box-shadow: 0 0 0 9999px rgba(0,0,0,0.5);"
-            }
+impl OverlayState {
+    pub fn new(capture: MonitorCapture) -> Self {
+        Self {
+            capture,
+            texture: None,
+            rect: SelectionRect::default(),
         }
     }
+}
+
+pub enum OverlayAction {
+    None,
+    Complete(SelectionRect),
+    Cancel,
+}
+
+pub fn render_overlay(
+    ui: &mut egui::Ui,
+    state: &mut OverlayState,
+) -> OverlayAction {
+    let ctx = ui.ctx().clone();
+
+    // キャプチャ画像からテクスチャをロード
+    if state.texture.is_none() {
+        let size = [state.capture.width as usize, state.capture.height as usize];
+        let color_image = egui::ColorImage::from_rgba_unmultiplied(
+            size,
+            state.capture.image.as_raw(),
+        );
+        state.texture = Some(ctx.load_texture(
+            "screen_capture",
+            color_image,
+            egui::TextureOptions::LINEAR,
+        ));
+    }
+
+    let mut action = OverlayAction::None;
+
+    // カーソルを十字にする
+    ctx.set_cursor_icon(egui::CursorIcon::Crosshair);
+
+    // ESCキーまたは右クリックでキャンセル
+    if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+        return OverlayAction::Cancel;
+    }
+    if ctx.input(|i| i.pointer.button_pressed(egui::PointerButton::Secondary)) {
+        return OverlayAction::Cancel;
+    }
+
+    let full_rect = ui.max_rect();
+
+    // 背景画像を描画
+    if let Some(texture) = &state.texture {
+        let painter = ui.painter();
+        painter.image(
+            texture.id(),
+            full_rect,
+            Rect::from_min_max(Pos2::new(0.0, 0.0), Pos2::new(1.0, 1.0)),
+            Color32::WHITE,
+        );
+    }
+
+    // マウス入力処理
+    let response = ui.allocate_rect(full_rect, egui::Sense::click_and_drag());
+
+    if response.drag_started_by(egui::PointerButton::Primary) {
+        if let Some(pos) = response.interact_pointer_pos() {
+            state.rect.start_x = pos.x;
+            state.rect.start_y = pos.y;
+            state.rect.current_x = pos.x;
+            state.rect.current_y = pos.y;
+            state.rect.is_dragging = true;
+        }
+    } else if response.dragged_by(egui::PointerButton::Primary) {
+        if let Some(pos) = response.interact_pointer_pos() {
+            state.rect.current_x = pos.x;
+            state.rect.current_y = pos.y;
+        }
+    } else if response.drag_stopped_by(egui::PointerButton::Primary) {
+        if state.rect.is_dragging {
+            state.rect.is_dragging = false;
+            action = OverlayAction::Complete(state.rect);
+        }
+    }
+
+    let painter = ui.painter();
+    let overlay_color = Color32::from_black_alpha(140);
+
+    if state.rect.is_dragging || state.rect.width() > 1.0 || state.rect.height() > 1.0 {
+        let sel = state.rect.to_egui_rect();
+
+        // 選択範囲の外側4つの領域を暗転
+        let top_rect = Rect::from_min_max(
+            full_rect.min,
+            Pos2::new(full_rect.max.x, sel.min.y.clamp(full_rect.min.y, full_rect.max.y)),
+        );
+        let bottom_rect = Rect::from_min_max(
+            Pos2::new(full_rect.min.x, sel.max.y.clamp(full_rect.min.y, full_rect.max.y)),
+            full_rect.max,
+        );
+        let left_rect = Rect::from_min_max(
+            Pos2::new(full_rect.min.x, sel.min.y.clamp(full_rect.min.y, full_rect.max.y)),
+            Pos2::new(sel.min.x.clamp(full_rect.min.x, full_rect.max.x), sel.max.y.clamp(full_rect.min.y, full_rect.max.y)),
+        );
+        let right_rect = Rect::from_min_max(
+            Pos2::new(sel.max.x.clamp(full_rect.min.x, full_rect.max.x), sel.min.y.clamp(full_rect.min.y, full_rect.max.y)),
+            Pos2::new(full_rect.max.x, sel.max.y.clamp(full_rect.min.y, full_rect.max.y)),
+        );
+
+        painter.rect_filled(top_rect, 0.0, overlay_color);
+        painter.rect_filled(bottom_rect, 0.0, overlay_color);
+        painter.rect_filled(left_rect, 0.0, overlay_color);
+        painter.rect_filled(right_rect, 0.0, overlay_color);
+
+        // 選択矩形の枠線を描画
+        painter.rect_stroke(sel, 0.0, Stroke::new(1.5, Color32::WHITE), StrokeKind::Outside);
+    } else {
+        // 選択前は薄く暗転
+        painter.rect_filled(full_rect, 0.0, Color32::from_black_alpha(60));
+    }
+
+    action
 }
