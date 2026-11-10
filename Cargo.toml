@@ -4,19 +4,13 @@ version = "0.1.0"
 authors = ["mutoxu=N <55544957+mutoxu-N@users.noreply.github.com>"]
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 arboard = "3.6.1"
-base64 = "0.22.1"
-dioxus = { version = "0.7.1", features = [] }
+eframe = "0.37.0"
+egui = "0.37.0"
+global-hotkey = "0.7"
 image = "0.25.10"
 open = "5.3.5"
 rqrr = "0.10.1"
+tray-icon = "0.21"
 xcap = "0.9.4"
-
-[features]
-default = ["desktop"]
-web = ["dioxus/web"]
-desktop = ["dioxus/desktop"]
-mobile = ["dioxus/mobile"]
