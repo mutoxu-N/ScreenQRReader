@@ -26,21 +26,12 @@ ScreenQRReaderは、デスクトップ画面に表示されているQRコード�
 
 ## 開発者向け
 
-このプロジェクトは Rust と Dioxus を使用して構築されています。
+このプロジェクトは Rust と egui (eframe) を使用して構築されています。
 
-### 必要なツール
-
-*   Rust
-*   Dioxus CLI
-
-```bash
-cargo install dioxus-cli
-```
-
-### 開発サーバーの起動
+### ビルドと実行
 
 プロジェクトのルートディレクトリで以下のコマンドを実行します。
 
 ```bash
-dx serve
+cargo run
 ```
