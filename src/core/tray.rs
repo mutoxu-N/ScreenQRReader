@@ -1,57 +1,46 @@
-use dioxus::{
-    desktop::{
-        trayicon::{
-            menu::{Menu, MenuItem},
-            TrayIconBuilder,
-        },
-        use_muda_event_handler,
-    },
-    prelude::provide_context,
-};
+use tray_icon::menu::{Menu, MenuItem};
+use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
 
-pub fn create_tray_menu() {
-    // タスクトレイアイコン
-    let icon = {
-        let icon_bytes = include_bytes!("../../assets/trayicon.png");
-        let img =
-            image::load_from_memory(icon_bytes).expect("アイコン画像の読み込みに失敗しました");
-        let rgba = img.into_rgba8();
-        let (w, h) = rgba.dimensions();
-        let i = dioxus::desktop::trayicon::Icon::from_rgba(rgba.into_raw(), w, h)
-            .expect("アイコンの作成に失敗しました");
-        i
+pub const MENU_CAPTURE_ID: &str = "capture";
+pub const MENU_QUIT_ID: &str = "quit";
+
+pub fn create_tray_menu() -> Option<TrayIcon> {
+    let icon_bytes = include_bytes!("../../assets/trayicon.png");
+    let img = match image::load_from_memory(icon_bytes) {
+        Ok(img) => img,
+        Err(e) => {
+            eprintln!("アイコン画像の読み込みに失敗しました: {}", e);
+            return None;
+        }
+    };
+    let rgba = img.into_rgba8();
+    let (w, h) = rgba.dimensions();
+    let icon = match Icon::from_rgba(rgba.into_raw(), w, h) {
+        Ok(i) => i,
+        Err(e) => {
+            eprintln!("トレイアイコンの作成に失敗しました: {}", e);
+            return None;
+        }
     };
 
-    // トレイメニュー
     let menu = Menu::new();
+    let capture_item = MenuItem::with_id(MENU_CAPTURE_ID, "QRキャプチャ (Ctrl+Shift+Q)", true, None);
+    let quit_item = MenuItem::with_id(MENU_QUIT_ID, "終了", true, None);
 
-    // メニューアイテム
-    let quit_item = MenuItem::with_id("quit", "Quit", true, None);
-    let _ = menu.append_items(&[&quit_item]).unwrap(); // アイテム登録
+    if let Err(e) = menu.append_items(&[&capture_item, &quit_item]) {
+        eprintln!("トレイメニューの構築に失敗しました: {}", e);
+    }
 
-    // トレイアイコンの作成
-    let builder = TrayIconBuilder::new()
+    match TrayIconBuilder::new()
         .with_menu(Box::new(menu))
-        .with_menu_on_left_click(false)
-        .with_icon(icon);
-
-    // Dioxusにトレイを登録
-    provide_context(builder.build().expect("TrayIconBuilderの失敗"));
-
-    // トレイメニューの右クリック処理
+        .with_tooltip("Screen QR Reader")
+        .with_icon(icon)
+        .build()
     {
-        use_muda_event_handler(move |event| {
-            println!("{:?}", event.id);
-            match event.id.0.as_str() {
-                // 終了
-                "quit" => {
-                    println!("quit>> {:?}", event.id);
-                    std::process::exit(0);
-                }
-                _ => {
-                    println!("quit>> {:?}", event.id);
-                }
-            }
-        });
+        Ok(tray) => Some(tray),
+        Err(e) => {
+            eprintln!("TrayIconBuilderの作成に失敗しました: {}", e);
+            None
+        }
     }
 }
