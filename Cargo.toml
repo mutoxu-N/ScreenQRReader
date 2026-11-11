@@ -12,6 +12,7 @@ global-hotkey = "0.7"
 image = "0.25.10"
 open = "5.3.5"
 rqrr = "0.10.1"
+rxing = { version = "0.9.4", default-features = false, features = ["decoders", "qrcode", "encoding_rs", "multi_barcode_readers"] }
 tray-icon = "0.21"
 xcap = "0.9.4"
 

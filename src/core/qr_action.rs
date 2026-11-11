@@ -2,6 +2,7 @@
 
 use crate::state::SelectionRect;
 use rqrr::PreparedImage;
+use std::collections::HashSet;
 
 pub fn process_qr_code(img: &image::RgbaImage, rect: &SelectionRect) {
     let x = rect.left().max(0.0) as u32;
@@ -28,39 +29,70 @@ pub fn process_qr_code(img: &image::RgbaImage, rect: &SelectionRect) {
     let cropped = image::imageops::crop_imm(img, crop_x, crop_y, crop_w, crop_h).to_image();
     let luma = image::DynamicImage::ImageRgba8(cropped).into_luma8();
 
-    // QRコードを検知
-    let mut prepared = PreparedImage::prepare(luma);
+    let mut decoded_contents = Vec::new();
+
+    // 1. まず高速な rqrr で試行
+    let mut prepared = PreparedImage::prepare(luma.clone());
     let grids = prepared.detect_grids();
 
-    if grids.is_empty() {
-        println!("ℹ️ 指定された領域からQRコードが検知されませんでした");
-    } else {
-        let mut texts_to_copy = Vec::new();
-
-        for grid in grids {
-            if let Ok((_, content)) = grid.decode() {
-                println!("✅ QRコードを検知しました: {}", content);
-                if content.starts_with("http://") || content.starts_with("https://") {
-                    if let Err(e) = open::that(&content) {
-                        eprintln!("ブラウザの起動に失敗しました: {}", e);
-                    }
-                } else {
-                    texts_to_copy.push(content);
-                }
-            } else {
-                eprintln!("⚠️ QRコードは検知できましたが、デコードに失敗しました");
-            }
+    for grid in grids {
+        if let Ok((_, content)) = grid.decode() {
+            decoded_contents.push(content);
         }
+    }
 
-        if !texts_to_copy.is_empty() {
-            let combined_text = texts_to_copy.join("\n");
-            if let Ok(mut clipboard) = arboard::Clipboard::new() {
-                if let Err(e) = clipboard.set_text(combined_text) {
-                    eprintln!("クリップボードへのコピーに失敗しました: {}", e);
-                }
-            } else {
-                eprintln!("クリップボードの初期化に失敗しました");
+    // 2. rqrr でデコードできなかった場合（角丸QRやデザインQR等）、rxing (ZXing) でフォールバック
+    if decoded_contents.is_empty() {
+        let (w, h) = luma.dimensions();
+        let mut hints = rxing::DecodeHints::default();
+        hints.PossibleFormats = Some(HashSet::from([rxing::BarcodeFormat::QR_CODE]));
+        hints.TryHarder = Some(true);
+
+        if let Ok(results) = rxing::helpers::detect_multiple_in_luma_with_hints(
+            luma.as_raw().to_vec(),
+            w,
+            h,
+            &mut hints,
+        ) {
+            for res in results {
+                decoded_contents.push(res.getText().to_string());
             }
+        } else if let Ok(result) = rxing::helpers::detect_in_luma_slice_with_hints(
+            luma.as_raw(),
+            w,
+            h,
+            Some(rxing::BarcodeFormat::QR_CODE),
+            &mut hints,
+        ) {
+            decoded_contents.push(result.getText().to_string());
+        }
+    }
+
+    if decoded_contents.is_empty() {
+        println!("ℹ️ 指定された領域からQRコードが検知されませんでした");
+        return;
+    }
+
+    let mut texts_to_copy = Vec::new();
+    for content in decoded_contents {
+        println!("✅ QRコードを検知しました: {}", content);
+        if content.starts_with("http://") || content.starts_with("https://") {
+            if let Err(e) = open::that(&content) {
+                eprintln!("ブラウザの起動に失敗しました: {}", e);
+            }
+        } else {
+            texts_to_copy.push(content);
+        }
+    }
+
+    if !texts_to_copy.is_empty() {
+        let combined_text = texts_to_copy.join("\n");
+        if let Ok(mut clipboard) = arboard::Clipboard::new() {
+            if let Err(e) = clipboard.set_text(combined_text) {
+                eprintln!("クリップボードへのコピーに失敗しました: {}", e);
+            }
+        } else {
+            eprintln!("クリップボードの初期化に失敗しました");
         }
     }
 }
