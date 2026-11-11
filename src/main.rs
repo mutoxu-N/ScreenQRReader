@@ -94,12 +94,15 @@ impl eframe::App for ScreenQrReaderApp {
                 let vp_id = egui::ViewportId::from_hash_of(&format!("overlay_{}", i));
                 let vp_builder = egui::ViewportBuilder::default()
                     .with_title("Screen QR Reader Overlay")
-                    .with_position([overlay_state.capture.x as f32, overlay_state.capture.y as f32])
-                    .with_inner_size([overlay_state.capture.width as f32, overlay_state.capture.height as f32])
+                    .with_visible(true)
                     .with_decorations(false)
-                    .with_always_on_top()
+                    .with_resizable(false)
+                    .with_has_shadow(false)
+                    .with_taskbar(false)
                     .with_transparent(true)
-                    .with_taskbar(false);
+                    .with_always_on_top()
+                    .with_position([overlay_state.capture.x as f32, overlay_state.capture.y as f32])
+                    .with_inner_size([overlay_state.capture.width as f32, overlay_state.capture.height as f32]);
 
                 ctx.show_viewport_immediate(vp_id, vp_builder, |vp_ui, _class| {
                     let action = components::overlay::render_overlay(vp_ui, overlay_state);
