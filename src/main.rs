@@ -43,11 +43,13 @@ impl ScreenQrReaderApp {
             .map(components::overlay::OverlayState::new)
             .collect();
         self.is_capturing = true;
+        core::platform::set_capturing_active(true);
     }
 
     fn cancel_capture(&mut self) {
         self.captures.clear();
         self.is_capturing = false;
+        core::platform::set_capturing_active(false);
         core::capture::finish_capture();
     }
 }

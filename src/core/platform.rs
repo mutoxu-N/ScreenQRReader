@@ -4,17 +4,23 @@
 mod windows_impl {
     use std::ffi::c_void;
     use std::mem::size_of;
-    use std::sync::atomic::{AtomicPtr, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicPtr, Ordering};
     use windows_sys::core::BOOL;
     use windows_sys::Win32::Foundation::{HMODULE, HWND, LPARAM, LRESULT, TRUE, WPARAM};
     use windows_sys::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_TRANSITIONS_FORCEDISABLED};
     use windows_sys::Win32::System::Threading::GetCurrentThreadId;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        CallNextHookEx, EnumThreadWindows, GetWindowTextW, SetWindowsHookExW, CBT_CREATEWNDW,
-        HHOOK, HCBT_CREATEWND, WH_CBT,
+        CallNextHookEx, EnumThreadWindows, GetWindowLongW, SetWindowLongW, SetWindowsHookExW,
+        UnhookWindowsHookEx, CBT_CREATEWNDW, GWL_EXSTYLE, HHOOK, HCBT_ACTIVATE, HCBT_CREATEWND,
+        WH_CBT, WS_CHILD, WS_EX_TOOLWINDOW,
     };
 
     static HOOK_HANDLE: AtomicPtr<c_void> = AtomicPtr::new(std::ptr::null_mut());
+    static IS_CAPTURING: AtomicBool = AtomicBool::new(false);
+
+    pub fn set_capturing_active(active: bool) {
+        IS_CAPTURING.store(active, Ordering::SeqCst);
+    }
 
     /// ウィンドウのDWMトランジション（表示・非表示・拡大縮小等のアニメーション）を強制的に無効化する
     pub fn disable_window_transitions(hwnd: HWND) {
@@ -29,29 +35,26 @@ mod windows_impl {
         }
     }
 
-    /// CBTフックプロシージャ: ウィンドウ生成時（表示前）にアニメーションを無効化
+    /// CBTフックプロシージャ: ウィンドウ生成時およびアクティブ化直前にアニメーションを無効化
     unsafe extern "system" fn cbt_hook_proc(
         n_code: i32,
         w_param: WPARAM,
         l_param: LPARAM,
     ) -> LRESULT {
-        if n_code == HCBT_CREATEWND as i32 {
-            let hwnd = w_param as HWND;
-            let create_struct = l_param as *const CBT_CREATEWNDW;
-            if !create_struct.is_null() && !(*create_struct).lpcs.is_null() {
-                let cs = &*(*create_struct).lpcs;
-                if !cs.lpszName.is_null() && (cs.lpszName as usize) > 0xFFFF {
-                    let mut len = 0;
-                    while *cs.lpszName.add(len) != 0 {
-                        len += 1;
-                    }
-                    let slice = std::slice::from_raw_parts(cs.lpszName, len);
-                    let title = String::from_utf16_lossy(slice);
-                    // オーバーレイウィンドウを検出してアニメーションを無効化
-                    if title.contains("Overlay") {
-                        disable_window_transitions(hwnd);
+        if IS_CAPTURING.load(Ordering::SeqCst) {
+            if n_code == HCBT_CREATEWND as i32 {
+                let create_struct = l_param as *mut CBT_CREATEWNDW;
+                if !create_struct.is_null() && !(*create_struct).lpcs.is_null() {
+                    let cs = &mut *(*create_struct).lpcs;
+                    if (cs.style as u32 & WS_CHILD) == 0 {
+                        // ウィンドウ作成時に WS_EX_TOOLWINDOW を付加してOSのアニメーション対象から除外
+                        cs.dwExStyle |= WS_EX_TOOLWINDOW;
                     }
                 }
+            } else if n_code == HCBT_ACTIVATE as i32 {
+                let hwnd = w_param as HWND;
+                // 表示・アクティブ化直前にDWMトランジションを確実に無効化（HWNDが有効なタイミング）
+                disable_window_transitions(hwnd);
             }
         }
 
@@ -59,7 +62,7 @@ mod windows_impl {
         CallNextHookEx(hook, n_code, w_param, l_param)
     }
 
-    /// スレッドフックを設定し、作成されるオーバーレイウィンドウのアニメーションを無効化
+    /// スレッドフックを設定
     pub fn init_window_animation_hook() {
         unsafe {
             let thread_id = GetCurrentThreadId();
@@ -80,22 +83,19 @@ mod windows_impl {
         let hook = HOOK_HANDLE.swap(std::ptr::null_mut(), Ordering::SeqCst);
         if !hook.is_null() {
             unsafe {
-                windows_sys::Win32::UI::WindowsAndMessaging::UnhookWindowsHookEx(hook as HHOOK);
+                UnhookWindowsHookEx(hook as HHOOK);
             }
         }
     }
 
-    /// タイトルに"Overlay"を含む自スレッドのウィンドウのアニメーションを無効化（バックアップ処理）
+    /// 自スレッドの全ウィンドウのアニメーションを無効化（バックアップ処理）
     pub fn disable_overlay_window_animations() {
         unsafe {
             unsafe extern "system" fn enum_proc(hwnd: HWND, _l_param: LPARAM) -> BOOL {
-                let mut buf = [0u16; 256];
-                let len = GetWindowTextW(hwnd, buf.as_mut_ptr(), buf.len() as i32);
-                if len > 0 {
-                    let title = String::from_utf16_lossy(&buf[..len as usize]);
-                    if title.contains("Overlay") {
-                        disable_window_transitions(hwnd);
-                    }
+                disable_window_transitions(hwnd);
+                let ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE);
+                if (ex_style as u32 & WS_EX_TOOLWINDOW) == 0 {
+                    SetWindowLongW(hwnd, GWL_EXSTYLE, ex_style | WS_EX_TOOLWINDOW as i32);
                 }
                 TRUE
             }
@@ -107,6 +107,9 @@ mod windows_impl {
 
 #[cfg(windows)]
 pub use windows_impl::*;
+
+#[cfg(not(windows))]
+pub fn set_capturing_active(_active: bool) {}
 
 #[cfg(not(windows))]
 pub fn init_window_animation_hook() {}
