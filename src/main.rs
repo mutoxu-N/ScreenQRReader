@@ -1,8 +1,14 @@
+use std::sync::mpsc::{channel, Receiver};
 use std::time::Duration;
 
 mod components;
 mod core;
 mod state;
+
+enum AppEvent {
+    Menu(tray_icon::menu::MenuEvent),
+    HotKey(global_hotkey::GlobalHotKeyEvent),
+}
 
 struct ScreenQrReaderApp {
     _tray_icon: Option<tray_icon::TrayIcon>,
@@ -10,13 +16,30 @@ struct ScreenQrReaderApp {
     hotkey: Option<global_hotkey::hotkey::HotKey>,
     captures: Vec<components::overlay::OverlayState>,
     is_capturing: bool,
+    event_rx: Receiver<AppEvent>,
 }
 
 impl ScreenQrReaderApp {
-    fn new(_cc: &eframe::CreationContext<'_>) -> Self {
+    fn new(cc: &eframe::CreationContext<'_>) -> Self {
         core::platform::init_window_animation_hook();
         let tray_icon = core::tray::create_tray_menu();
         let (hotkey_manager, hotkey) = core::hotkey::setup_hotkey();
+
+        let (tx, rx) = channel();
+
+        let tx_menu = tx.clone();
+        let ctx_menu = cc.egui_ctx.clone();
+        tray_icon::menu::MenuEvent::set_event_handler(Some(move |event| {
+            let _ = tx_menu.send(AppEvent::Menu(event));
+            ctx_menu.request_repaint();
+        }));
+
+        let tx_hotkey = tx.clone();
+        let ctx_hotkey = cc.egui_ctx.clone();
+        global_hotkey::GlobalHotKeyEvent::set_event_handler(Some(move |event| {
+            let _ = tx_hotkey.send(AppEvent::HotKey(event));
+            ctx_hotkey.request_repaint();
+        }));
 
         Self {
             _tray_icon: tray_icon,
@@ -24,6 +47,7 @@ impl ScreenQrReaderApp {
             hotkey,
             captures: Vec::new(),
             is_capturing: false,
+            event_rx: rx,
         }
     }
 
@@ -56,6 +80,8 @@ impl ScreenQrReaderApp {
 
 impl Drop for ScreenQrReaderApp {
     fn drop(&mut self) {
+        tray_icon::menu::MenuEvent::set_event_handler::<fn(tray_icon::menu::MenuEvent)>(None);
+        global_hotkey::GlobalHotKeyEvent::set_event_handler::<fn(global_hotkey::GlobalHotKeyEvent)>(None);
         core::platform::cleanup_window_animation_hook();
     }
 }
@@ -68,25 +94,26 @@ impl eframe::App for ScreenQrReaderApp {
     fn ui(&mut self, _ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = _ui.ctx().clone();
 
-        // トレイメニューイベントのポーリング
-        if let Ok(event) = tray_icon::menu::MenuEvent::receiver().try_recv() {
-            match event.id().as_ref() {
-                core::tray::MENU_QUIT_ID => {
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                    return;
+        // トレイメニューおよびホットキーイベントの処理
+        while let Ok(event) = self.event_rx.try_recv() {
+            match event {
+                AppEvent::Menu(menu_event) => {
+                    match menu_event.id().as_ref() {
+                        core::tray::MENU_QUIT_ID => {
+                            std::process::exit(0);
+                        }
+                        core::tray::MENU_CAPTURE_ID => {
+                            self.trigger_capture();
+                        }
+                        _ => {}
+                    }
                 }
-                core::tray::MENU_CAPTURE_ID => {
-                    self.trigger_capture();
-                }
-                _ => {}
-            }
-        }
-
-        // ホットキーイベントのポーリング
-        if let Ok(event) = global_hotkey::GlobalHotKeyEvent::receiver().try_recv() {
-            if let Some(hotkey) = &self.hotkey {
-                if event.id == hotkey.id() && event.state == global_hotkey::HotKeyState::Pressed {
-                    self.trigger_capture();
+                AppEvent::HotKey(hotkey_event) => {
+                    if let Some(hotkey) = &self.hotkey {
+                        if hotkey_event.id == hotkey.id() && hotkey_event.state == global_hotkey::HotKeyState::Pressed {
+                            self.trigger_capture();
+                        }
+                    }
                 }
             }
         }
@@ -151,7 +178,7 @@ fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("Screen QR Reader")
-            .with_visible(false)
+            .with_visible(true)
             .with_decorations(false)
             .with_transparent(true)
             .with_taskbar(false)
