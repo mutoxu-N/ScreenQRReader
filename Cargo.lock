@@ -4385,6 +4385,7 @@ dependencies = [
  "open",
  "rqrr",
  "tray-icon",
+ "windows-sys 0.61.2",
  "xcap",
 ]
 

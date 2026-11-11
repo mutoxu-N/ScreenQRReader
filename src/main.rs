@@ -14,6 +14,7 @@ struct ScreenQrReaderApp {
 
 impl ScreenQrReaderApp {
     fn new(_cc: &eframe::CreationContext<'_>) -> Self {
+        core::platform::init_window_animation_hook();
         let tray_icon = core::tray::create_tray_menu();
         let (hotkey_manager, hotkey) = core::hotkey::setup_hotkey();
 
@@ -48,6 +49,12 @@ impl ScreenQrReaderApp {
         self.captures.clear();
         self.is_capturing = false;
         core::capture::finish_capture();
+    }
+}
+
+impl Drop for ScreenQrReaderApp {
+    fn drop(&mut self) {
+        core::platform::cleanup_window_animation_hook();
     }
 }
 
@@ -91,7 +98,8 @@ impl eframe::App for ScreenQrReaderApp {
                     .with_inner_size([overlay_state.capture.width as f32, overlay_state.capture.height as f32])
                     .with_decorations(false)
                     .with_always_on_top()
-                    .with_transparent(true);
+                    .with_transparent(true)
+                    .with_taskbar(false);
 
                 ctx.show_viewport_immediate(vp_id, vp_builder, |vp_ui, _class| {
                     let action = components::overlay::render_overlay(vp_ui, overlay_state);
@@ -106,6 +114,8 @@ impl eframe::App for ScreenQrReaderApp {
                     }
                 });
             }
+
+            core::platform::disable_overlay_window_animations();
 
             if let Some((idx, rect)) = completed_idx_and_rect {
                 if idx < self.captures.len() {
