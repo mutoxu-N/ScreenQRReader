@@ -93,10 +93,11 @@ impl eframe::App for ScreenQrReaderApp {
             let mut should_cancel = false;
 
             for (i, overlay_state) in self.captures.iter_mut().enumerate() {
+                let is_ready = overlay_state.is_ready;
                 let vp_id = egui::ViewportId::from_hash_of(&format!("overlay_{}", i));
                 let vp_builder = egui::ViewportBuilder::default()
                     .with_title("Screen QR Reader Overlay")
-                    .with_visible(true)
+                    .with_visible(is_ready)
                     .with_decorations(false)
                     .with_resizable(false)
                     .with_has_shadow(false)
@@ -108,6 +109,10 @@ impl eframe::App for ScreenQrReaderApp {
 
                 ctx.show_viewport_immediate(vp_id, vp_builder, |vp_ui, _class| {
                     let action = components::overlay::render_overlay(vp_ui, overlay_state);
+                    if !is_ready {
+                        overlay_state.is_ready = true;
+                        vp_ui.ctx().request_repaint();
+                    }
                     match action {
                         components::overlay::OverlayAction::Complete(rect) => {
                             completed_idx_and_rect = Some((i, rect));

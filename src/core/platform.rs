@@ -11,8 +11,9 @@ mod windows_impl {
     use windows_sys::Win32::System::Threading::GetCurrentThreadId;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         CallNextHookEx, EnumThreadWindows, GetWindowLongW, SetWindowLongW, SetWindowsHookExW,
-        UnhookWindowsHookEx, CBT_CREATEWNDW, GWL_EXSTYLE, HHOOK, HCBT_ACTIVATE, HCBT_CREATEWND,
-        WH_CBT, WS_CHILD, WS_EX_TOOLWINDOW,
+        UnhookWindowsHookEx, CBT_CREATEWNDW, GWL_EXSTYLE, GWL_STYLE, HHOOK, HCBT_ACTIVATE,
+        HCBT_CREATEWND, WH_CBT, WS_CAPTION, WS_CHILD, WS_EX_TOOLWINDOW, WS_POPUP, WS_THICKFRAME,
+        WS_VISIBLE,
     };
 
     static HOOK_HANDLE: AtomicPtr<c_void> = AtomicPtr::new(std::ptr::null_mut());
@@ -47,8 +48,17 @@ mod windows_impl {
                 if !create_struct.is_null() && !(*create_struct).lpcs.is_null() {
                     let cs = &mut *(*create_struct).lpcs;
                     if (cs.style as u32 & WS_CHILD) == 0 {
-                        // ウィンドウ作成時に WS_EX_TOOLWINDOW を付加してOSのアニメーション対象から除外
-                        cs.dwExStyle |= WS_EX_TOOLWINDOW;
+                        let mut style = cs.style as u32;
+                        // 1. 最初は非表示で作成（位置・サイズ調整完了まで画面に出さない）
+                        style &= !WS_VISIBLE;
+
+                        // 2. WS_POPUP に設定し、枠線・キャプションを除去（OSのアプリ起動アニメーションを遮断）
+                        style = (style & !(WS_CAPTION | WS_THICKFRAME)) | WS_POPUP;
+
+                        cs.style = style as i32;
+
+                        // 3. WS_EX_TOOLWINDOW を付加（タスクバー・アニメーションから除外）
+                        cs.dwExStyle = (cs.dwExStyle as u32 | WS_EX_TOOLWINDOW) as _;
                     }
                 }
             } else if n_code == HCBT_ACTIVATE as i32 {
@@ -88,7 +98,7 @@ mod windows_impl {
         }
     }
 
-    /// 自スレッドの全ウィンドウのアニメーションを無効化（バックアップ処理）
+    /// 自スレッドの全オーバーレイウィンドウのアニメーションを無効化（バックアップ処理）
     pub fn disable_overlay_window_animations() {
         unsafe {
             unsafe extern "system" fn enum_proc(hwnd: HWND, _l_param: LPARAM) -> BOOL {
@@ -96,6 +106,10 @@ mod windows_impl {
                 let ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE);
                 if (ex_style as u32 & WS_EX_TOOLWINDOW) == 0 {
                     SetWindowLongW(hwnd, GWL_EXSTYLE, ex_style | WS_EX_TOOLWINDOW as i32);
+                }
+                let style = GetWindowLongW(hwnd, GWL_STYLE);
+                if (style as u32 & WS_POPUP) == 0 {
+                    SetWindowLongW(hwnd, GWL_STYLE, (style & !(WS_CAPTION as i32 | WS_THICKFRAME as i32)) | WS_POPUP as i32);
                 }
                 TRUE
             }

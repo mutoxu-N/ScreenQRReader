@@ -8,6 +8,7 @@ pub struct OverlayState {
     pub capture: MonitorCapture,
     pub texture: Option<egui::TextureHandle>,
     pub rect: SelectionRect,
+    pub is_ready: bool,
 }
 
 impl OverlayState {
@@ -16,6 +17,7 @@ impl OverlayState {
             capture,
             texture: None,
             rect: SelectionRect::default(),
+            is_ready: false,
         }
     }
 }
