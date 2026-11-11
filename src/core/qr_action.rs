@@ -95,4 +95,6 @@ pub fn process_qr_code(img: &image::RgbaImage, rect: &SelectionRect) {
             eprintln!("クリップボードの初期化に失敗しました");
         }
     }
+
+    crate::core::platform::trim_memory();
 }

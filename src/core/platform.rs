@@ -8,7 +8,9 @@ mod windows_impl {
     use windows_sys::core::BOOL;
     use windows_sys::Win32::Foundation::{HMODULE, HWND, LPARAM, LRESULT, TRUE, WPARAM};
     use windows_sys::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_TRANSITIONS_FORCEDISABLED};
-    use windows_sys::Win32::System::Threading::GetCurrentThreadId;
+    use windows_sys::Win32::System::Threading::{
+        GetCurrentProcess, GetCurrentThreadId, SetProcessWorkingSetSize,
+    };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         CallNextHookEx, EnumThreadWindows, GetWindowLongW, SetWindowLongW, SetWindowsHookExW,
         UnhookWindowsHookEx, CBT_CREATEWNDW, GWL_EXSTYLE, GWL_STYLE, HHOOK, HCBT_ACTIVATE,
@@ -117,6 +119,13 @@ mod windows_impl {
             EnumThreadWindows(GetCurrentThreadId(), Some(enum_proc), 0);
         }
     }
+
+    /// 未使用の物理メモリ（ワーキングセット）をOSへ返却
+    pub fn trim_memory() {
+        unsafe {
+            SetProcessWorkingSetSize(GetCurrentProcess(), !0, !0);
+        }
+    }
 }
 
 #[cfg(windows)]
@@ -133,3 +142,6 @@ pub fn cleanup_window_animation_hook() {}
 
 #[cfg(not(windows))]
 pub fn disable_overlay_window_animations() {}
+
+#[cfg(not(windows))]
+pub fn trim_memory() {}

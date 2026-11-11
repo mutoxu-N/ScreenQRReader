@@ -74,9 +74,11 @@ impl ScreenQrReaderApp {
 
     fn cancel_capture(&mut self) {
         self.captures.clear();
+        self.captures.shrink_to_fit();
         self.is_capturing = false;
         core::platform::set_capturing_active(false);
         core::capture::finish_capture();
+        core::platform::trim_memory();
     }
 }
 
@@ -162,12 +164,19 @@ impl eframe::App for ScreenQrReaderApp {
 
             if let Some((idx, rect)) = completed_idx_and_rect {
                 if idx < self.captures.len() {
-                    let capture = &self.captures[idx].capture;
-                    core::qr_action::process_qr_code(&capture.image, &rect);
+                    let target_overlay = self.captures.swap_remove(idx);
+                    self.cancel_capture();
+                    ctx.request_repaint();
+                    core::qr_action::process_qr_code(&target_overlay.capture.image, &rect);
+                    drop(target_overlay);
+                    core::platform::trim_memory();
+                } else {
+                    self.cancel_capture();
+                    ctx.request_repaint();
                 }
-                self.cancel_capture();
             } else if should_cancel {
                 self.cancel_capture();
+                ctx.request_repaint();
             }
         }
 
