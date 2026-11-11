@@ -61,8 +61,12 @@ impl Drop for ScreenQrReaderApp {
 }
 
 impl eframe::App for ScreenQrReaderApp {
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        let ctx = ui.ctx().clone();
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        egui::Rgba::TRANSPARENT.to_array()
+    }
+
+    fn ui(&mut self, _ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = _ui.ctx().clone();
 
         // トレイメニューイベントのポーリング
         if let Ok(event) = tray_icon::menu::MenuEvent::receiver().try_recv() {
@@ -138,24 +142,6 @@ impl eframe::App for ScreenQrReaderApp {
             }
         }
 
-        // メインウィンドウUI
-        ui.vertical_centered(|ui| {
-            ui.heading("Screen QR Reader");
-            ui.add_space(4.0);
-            ui.label("ホットキー: Ctrl + Shift + Q");
-            ui.label("タスクトレイにも常駐しています");
-            ui.add_space(10.0);
-
-            if ui.button("📷 画面をキャプチャ").clicked() {
-                self.trigger_capture();
-            }
-
-            ui.add_space(6.0);
-            if ui.button("終了").clicked() {
-                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-            }
-        });
-
         // イベント監視のため低頻度で再描画リクエスト
         ctx.request_repaint_after(Duration::from_millis(50));
     }
@@ -165,8 +151,14 @@ fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("Screen QR Reader")
-            .with_inner_size([280.0, 160.0])
-            .with_resizable(false),
+            .with_visible(false)
+            .with_decorations(false)
+            .with_transparent(true)
+            .with_taskbar(false)
+            .with_has_shadow(false)
+            .with_resizable(false)
+            .with_inner_size([1.0, 1.0])
+            .with_position([-10000.0, -10000.0]),
         ..Default::default()
     };
 
