@@ -4520,23 +4520,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
-name = "screen-qr-reader"
-version = "0.1.0"
-dependencies = [
- "arboard",
- "eframe",
- "egui",
- "global-hotkey",
- "image",
- "open",
- "rqrr",
- "rxing",
- "tray-icon",
- "windows-sys 0.61.2",
- "xcap",
-]
-
-[[package]]
 name = "sctk-adwaita"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4802,6 +4785,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d9571ea910ebd84c86af4b3ed27f9dbdc6ad06f17c5f96146b2b671e2976744f"
 dependencies = [
  "bitflags 2.13.2",
+]
+
+[[package]]
+name = "sqrr"
+version = "0.2.0"
+dependencies = [
+ "arboard",
+ "eframe",
+ "egui",
+ "global-hotkey",
+ "image",
+ "open",
+ "rqrr",
+ "rxing",
+ "tray-icon",
+ "windows-sys 0.61.2",
+ "xcap",
 ]
 
 [[package]]

@@ -1,6 +1,6 @@
 [package]
 name = "sqrr"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["mutoxu=N <55544957+mutoxu-N@users.noreply.github.com>"]
 edition = "2021"
 
